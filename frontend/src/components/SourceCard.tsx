@@ -1,0 +1,154 @@
+"use client";
+
+import { useState } from "react";
+import { ChevronRight, Zap, XCircle, Signal } from "lucide-react";
+import type { SourceSummary, ConfigEntry } from "@/lib/api";
+import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { ConfigRow } from "./ConfigRow";
+
+interface Props {
+  source: SourceSummary;
+  category: "white" | "black";
+}
+
+export function SourceCard({ source, category }: Props) {
+  const [open, setOpen] = useState(false);
+  const [configs, setConfigs] = useState<ConfigEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState<"all" | "alive" | "dead">("all");
+
+  const toggle = async () => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    if (configs.length === 0) {
+      setLoading(true);
+      try {
+        const data = await api.getSource(source.id);
+        setConfigs(data.configs || []);
+      } catch {
+        // keep empty
+      }
+      setLoading(false);
+    }
+  };
+
+  const refreshConfigs = async () => {
+    try {
+      const data = await api.getSource(source.id);
+      setConfigs(data.configs || []);
+    } catch {
+      // silent
+    }
+  };
+
+  const filtered = configs
+    .filter((c) => {
+      if (filter === "alive") return c.status === "success";
+      if (filter === "dead") return c.status !== "success";
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.status === "success" && b.status !== "success") return -1;
+      if (a.status !== "success" && b.status === "success") return 1;
+      if (a.latency && b.latency) return a.latency - b.latency;
+      return 0;
+    });
+
+  return (
+    <div className="glass glass-hover overflow-hidden">
+      {/* Header */}
+      <button
+        onClick={toggle}
+        className="w-full flex items-center gap-3 p-4 text-left hover:bg-bg-hover transition-colors"
+        aria-expanded={open}
+      >
+        <ChevronRight
+          size={14}
+          className={cn(
+            "text-muted transition-transform duration-200 shrink-0",
+            open && "rotate-90"
+          )}
+        />
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2.5">
+            <span className="text-sm font-semibold truncate">{source.label}</span>
+            <span
+              className={cn(
+                "shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
+                category === "white"
+                  ? "bg-accent-dim text-accent-light"
+                  : "bg-zinc-700/50 text-zinc-400"
+              )}
+            >
+              {category === "white" ? "Для отключений" : "Обычный VPN"}
+            </span>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="flex items-center gap-4 text-xs shrink-0">
+          <span className="flex items-center gap-1 text-success">
+            <Zap size={12} />
+            {source.alive}
+          </span>
+          <span className="flex items-center gap-1 text-danger">
+            <XCircle size={12} />
+            {source.dead}
+          </span>
+          {source.avg_latency > 0 && (
+            <span className="flex items-center gap-1 text-warn">
+              <Signal size={12} />
+              {source.avg_latency}ms
+            </span>
+          )}
+          <span className="text-muted">{source.total_links} всего</span>
+        </div>
+      </button>
+
+      {/* Body */}
+      {open && (
+        <div className="border-t border-border animate-fade-in">
+          {/* Filter bar */}
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/50 bg-bg/50">
+            {(["all", "alive", "dead"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={cn(
+                  "px-3 py-1 rounded-full text-xs font-medium transition-colors",
+                  filter === f
+                    ? "bg-accent text-white"
+                    : "text-muted hover:text-zinc-300 hover:bg-zinc-800"
+                )}
+              >
+                {f === "all" ? "Все" : f === "alive" ? "Живые" : "Мёртвые"}
+              </button>
+            ))}
+            <button
+              onClick={refreshConfigs}
+              className="ml-auto text-xs text-muted hover:text-zinc-300 transition-colors"
+            >
+              Обновить
+            </button>
+          </div>
+
+          {/* Configs */}
+          <div className="max-h-[500px] overflow-y-auto">
+            {loading ? (
+              <div className="p-8 text-center text-muted text-sm">Загрузка...</div>
+            ) : filtered.length === 0 ? (
+              <div className="p-8 text-center text-muted text-sm">Нет конфигов</div>
+            ) : (
+              filtered.map((cfg, i) => <ConfigRow key={i} config={cfg} />)
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
