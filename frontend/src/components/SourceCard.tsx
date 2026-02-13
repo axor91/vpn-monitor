@@ -63,7 +63,7 @@ export function SourceCard({ source, category }: Props) {
       {/* Header */}
       <button
         onClick={toggle}
-        className="w-full flex items-center gap-3 p-4 text-left hover:bg-bg-hover transition-colors"
+        className="w-full flex items-center gap-3 p-3 sm:p-4 text-left hover:bg-bg-hover transition-colors"
         aria-expanded={open}
       >
         <ChevronRight
@@ -75,8 +75,8 @@ export function SourceCard({ source, category }: Props) {
         />
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2.5">
-            <span className="text-sm font-semibold truncate">{source.label}</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold truncate max-w-[180px] sm:max-w-none">{source.label}</span>
             <span
               className={cn(
                 "shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
@@ -88,25 +88,24 @@ export function SourceCard({ source, category }: Props) {
               {category === "white" ? "Для отключений" : "Обычный VPN"}
             </span>
           </div>
-        </div>
-
-        {/* Stats */}
-        <div className="flex items-center gap-4 text-xs shrink-0">
-          <span className="flex items-center gap-1 text-success">
-            <Zap size={12} />
-            {source.alive}
-          </span>
-          <span className="flex items-center gap-1 text-danger">
-            <XCircle size={12} />
-            {source.dead}
-          </span>
-          {source.avg_latency > 0 && (
-            <span className="flex items-center gap-1 text-warn">
-              <Signal size={12} />
-              {source.avg_latency}ms
+          {/* Stats — below label on mobile, inline on desktop */}
+          <div className="flex items-center gap-3 sm:gap-4 mt-1.5 sm:mt-1 text-xs text-muted">
+            <span className="flex items-center gap-1 text-success">
+              <Zap size={12} />
+              {source.alive}
             </span>
-          )}
-          <span className="text-muted">{source.total_links} всего</span>
+            <span className="flex items-center gap-1 text-danger">
+              <XCircle size={12} />
+              {source.dead}
+            </span>
+            {source.avg_latency > 0 && (
+              <span className="flex items-center gap-1 text-warn">
+                <Signal size={12} />
+                {source.avg_latency}ms
+              </span>
+            )}
+            <span>{source.total_links} всего</span>
+          </div>
         </div>
       </button>
 

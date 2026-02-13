@@ -29,28 +29,28 @@ export function ConfigRow({ config: c }: Props) {
   const fl = c.geo ? countryFlag(c.geo.code) : "";
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border/30 last:border-b-0 hover:bg-bg-hover transition-colors group">
+    <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 border-b border-border/30 last:border-b-0 hover:bg-bg-hover transition-colors group">
       {/* Status dot */}
       <div className={cn("w-2 h-2 rounded-full shrink-0", dotClass)} />
 
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="text-xs font-medium text-zinc-200 truncate">{c.name}</div>
-        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+        <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap">
           <span className="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 rounded text-[10px] font-bold uppercase tracking-wider">
             {c.protocol}
           </span>
-          <span className="text-[11px] text-muted truncate max-w-[140px]">{c.address}</span>
+          <span className="text-[11px] text-muted truncate max-w-[100px] sm:max-w-[140px]">{c.address}</span>
           {c.geo && (
-            <span className="text-[11px] text-zinc-400">
-              {fl} {c.geo.country} ({c.geo.isp})
+            <span className="text-[11px] text-zinc-400 truncate max-w-[120px] sm:max-w-none">
+              {fl} {c.geo.country}
             </span>
           )}
           {c.checked_at && (
-            <span className="text-[10px] text-zinc-600">{relativeTime(c.checked_at)}</span>
+            <span className="hidden sm:inline text-[10px] text-zinc-600">{relativeTime(c.checked_at)}</span>
           )}
           {!ok && c.error && (
-            <span className="text-[10px] text-danger truncate max-w-[150px]">{c.error}</span>
+            <span className="text-[10px] text-danger truncate max-w-[100px] sm:max-w-[150px]">{c.error}</span>
           )}
         </div>
       </div>
@@ -72,7 +72,7 @@ export function ConfigRow({ config: c }: Props) {
         )}
       >
         {copied ? <Check size={12} /> : <Copy size={12} />}
-        {copied ? "OK" : "Копировать"}
+        <span className="hidden sm:inline">{copied ? "OK" : "Копировать"}</span>
       </button>
     </div>
   );
