@@ -1,16 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, RefreshCw } from "lucide-react";
 import type { ConfigEntry } from "@/lib/api";
+import { api } from "@/lib/api";
 import { cn, countryFlag, relativeTime, latencyColor, formatLatency } from "@/lib/utils";
 
 interface Props {
   config: ConfigEntry;
 }
 
-export function ConfigRow({ config: c }: Props) {
+export function ConfigRow({ config }: Props) {
+  const [c, setC] = useState(config);
   const [copied, setCopied] = useState(false);
+  const [checking, setChecking] = useState(false);
+
   const ok = c.status === "success";
 
   const copy = () => {
@@ -18,6 +22,25 @@ export function ConfigRow({ config: c }: Props) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
+  };
+
+  const recheck = async () => {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const result = await api.testLink(c.link);
+      setC((prev) => ({
+        ...prev,
+        status: result.status,
+        latency: result.latency ?? null,
+        geo: result.geo ?? prev.geo,
+        error: result.msg,
+        checked_at: new Date().toISOString().replace("T", " ").slice(0, 19),
+      }));
+    } catch {
+      // silent
+    }
+    setChecking(false);
   };
 
   const dotClass = ok
@@ -59,6 +82,22 @@ export function ConfigRow({ config: c }: Props) {
       <div className={cn("text-xs font-bold min-w-[50px] text-right shrink-0", latencyColor(c.latency))}>
         {ok ? formatLatency(c.latency) : "—"}
       </div>
+
+      {/* Recheck */}
+      <button
+        onClick={recheck}
+        disabled={checking}
+        title="Перепроверить профиль"
+        className={cn(
+          "shrink-0 flex items-center justify-center w-8 h-8 rounded-md transition-all",
+          "sm:opacity-0 sm:group-hover:opacity-100",
+          checking
+            ? "text-zinc-500 cursor-not-allowed"
+            : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800"
+        )}
+      >
+        <RefreshCw size={13} className={cn(checking && "animate-spin")} />
+      </button>
 
       {/* Copy */}
       <button

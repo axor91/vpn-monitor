@@ -124,37 +124,6 @@ async def api_start_check(request: Request):
     return {"status": "ok", "msg": "Проверка запущена"}
 
 
-@router.post("/check_source/{source_id}")
-async def api_check_source(source_id: str, request: Request):
-    client_ip = request.client.host if request.client else "unknown"
-    if not _check_rate(f"check_source:{client_ip}:{source_id}", settings.rate_limit_check):
-        return JSONResponse({"error": "Слишком много запросов"}, status_code=429)
-
-    if source_id not in SUBSCRIPTION_SOURCES:
-        return JSONResponse({"error": "Источник не найден"}, status_code=404)
-
-    data = storage.get_data()
-    lock = storage.get_lock()
-
-    with lock:
-        prog = data.get("check_progress", {})
-        if source_id in prog:
-            return JSONResponse({"error": "Этот источник уже проверяется"}, status_code=409)
-
-    source_info = SUBSCRIPTION_SOURCES[source_id]
-
-    def _run():
-        try:
-            checker.check_single_source(source_id, source_info, data, lock)
-        finally:
-            with lock:
-                data["last_update"] = __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            storage.save()
-
-    threading.Thread(target=_run, daemon=True).start()
-    return {"status": "ok", "msg": f"Проверка {source_info['label']} запущена"}
-
-
 @router.post("/stop_check")
 async def api_stop_check():
     data = storage.get_data()
