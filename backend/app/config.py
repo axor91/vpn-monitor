@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     parallel_sources: int = 3
     parallel_tests: int = 6
     inter_test_delay: float = 0.3
-    check_interval: int = 3600
+    check_interval: int = 21600
 
     # Geo
     geo_cache_ttl: int = 3600

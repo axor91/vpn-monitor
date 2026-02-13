@@ -1,89 +1,35 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
-import { Shield, Globe, Play, RefreshCw, Wrench } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { Shield, Globe, Wrench } from "lucide-react";
 import { api } from "@/lib/api";
 import type { SummaryData } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { StatusBar } from "@/components/StatusBar";
 import { SourceCard } from "@/components/SourceCard";
 import { ManualCheck } from "@/components/ManualCheck";
-import { ToastContainer, toast } from "@/components/Toast";
+import { ToastContainer } from "@/components/Toast";
 
 type Tab = "dashboard" | "white" | "black" | "manual";
 
 export default function HomePage() {
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [tab, setTab] = useState<Tab>("dashboard");
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollingRef = useRef(false);
 
   const loadSummary = useCallback(async () => {
     try {
       const data = await api.getSummary();
       setSummary(data);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Ошибка";
-      toast("Ошибка загрузки: " + msg, "error");
+    } catch {
+      // silent
     }
-  }, []);
-
-  const startPolling = useCallback(() => {
-    if (pollRef.current) return;
-    pollRef.current = setInterval(async () => {
-      if (pollingRef.current) return;
-      pollingRef.current = true;
-      try {
-        const data = await api.getSummary();
-        setSummary(data);
-        if (!data.is_checking) {
-          if (pollRef.current) clearInterval(pollRef.current);
-          pollRef.current = null;
-        }
-      } catch {
-        // silent
-      }
-      pollingRef.current = false;
-    }, 2500);
   }, []);
 
   useEffect(() => {
     loadSummary();
-    // Background status check
-    const bg = setInterval(async () => {
-      try {
-        const s = await api.getStatus();
-        if (s.is_checking && !pollRef.current) startPolling();
-      } catch {
-        // silent
-      }
-    }, 5000);
-    return () => {
-      clearInterval(bg);
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [loadSummary, startPolling]);
-
-  const handleStart = async () => {
-    try {
-      await api.startCheck();
-      toast("Проверка запущена", "success");
-      startPolling();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Ошибка";
-      toast(msg, "error");
-    }
-  };
-
-  const handleStop = async () => {
-    try {
-      await api.stopCheck();
-      toast("Остановка запрошена", "info");
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Ошибка";
-      toast(msg, "error");
-    }
-  };
+    const interval = setInterval(loadSummary, 30000);
+    return () => clearInterval(interval);
+  }, [loadSummary]);
 
   const whiteAlive = (summary?.white || []).reduce((s, src) => s + src.alive, 0);
   const blackAlive = (summary?.black || []).reduce((s, src) => s + src.alive, 0);
@@ -114,32 +60,11 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleStart}
-              disabled={summary?.is_checking}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all",
-                summary?.is_checking
-                  ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                  : "bg-accent text-white hover:bg-accent/80 shadow-lg shadow-accent/20 hover:shadow-accent/30"
-              )}
-            >
-              <Play size={14} />
-              Запустить проверку
-            </button>
-            <button
-              onClick={loadSummary}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium bg-bg-card border border-border text-zinc-400 hover:text-zinc-200 hover:border-border-hover transition-all"
-            >
-              <RefreshCw size={14} />
-            </button>
-          </div>
         </header>
 
         {/* Status */}
         <div className="mb-6">
-          <StatusBar data={summary} onStop={handleStop} />
+          <StatusBar data={summary} />
         </div>
 
         {/* Tabs */}
@@ -191,7 +116,7 @@ export default function HomePage() {
                 <div className="space-y-2">
                   {(summary?.white || []).length === 0 ? (
                     <div className="glass p-8 text-center text-muted text-sm">
-                      Данных нет. Нажмите «Запустить проверку».
+                      Данных пока нет. Проверка запускается автоматически.
                     </div>
                   ) : (
                     (summary?.white || []).map((src) => (
@@ -217,7 +142,7 @@ export default function HomePage() {
                 <div className="space-y-2">
                   {(summary?.black || []).length === 0 ? (
                     <div className="glass p-8 text-center text-muted text-sm">
-                      Данных нет. Нажмите «Запустить проверку».
+                      Данных пока нет. Проверка запускается автоматически.
                     </div>
                   ) : (
                     (summary?.black || []).map((src) => (

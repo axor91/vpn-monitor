@@ -1,15 +1,14 @@
 "use client";
 
-import { Activity, Clock, Wifi, Square } from "lucide-react";
+import { Activity, Clock, Wifi } from "lucide-react";
 import type { SummaryData } from "@/lib/api";
 import { relativeTime } from "@/lib/utils";
 
 interface Props {
   data: SummaryData | null;
-  onStop: () => void;
 }
 
-export function StatusBar({ data, onStop }: Props) {
+export function StatusBar({ data }: Props) {
   if (!data) {
     return (
       <div className="glass p-4 animate-pulse">
@@ -73,16 +72,6 @@ export function StatusBar({ data, onStop }: Props) {
           </div>
         </div>
 
-        {/* Stop button */}
-        {isChecking && (
-          <button
-            onClick={onStop}
-            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-danger border border-danger/30 rounded-lg hover:bg-danger/10 transition-colors"
-          >
-            <Square size={12} />
-            Стоп
-          </button>
-        )}
       </div>
 
       {/* Progress bar */}

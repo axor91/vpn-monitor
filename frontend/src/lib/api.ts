@@ -85,6 +85,7 @@ export const api = {
   getSource: (id: string) => fetchJSON<SourceData>(`/results/${id}`),
   startCheck: () => fetchJSON<{ status: string; msg: string }>("/start_check", { method: "POST" }),
   stopCheck: () => fetchJSON<{ status: string; msg: string }>("/stop_check", { method: "POST" }),
+  checkSource: (id: string) => fetchJSON<{ status: string; msg: string }>(`/check_source/${id}`, { method: "POST" }),
   testLink: (link: string) =>
     fetchJSON<TestResult>("/test_link", {
       method: "POST",
