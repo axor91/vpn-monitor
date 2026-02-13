@@ -25,5 +25,5 @@ def fetch_subscription(url: str) -> list[str]:
 
         return [line.strip() for line in text.splitlines() if "://" in line]
     except Exception as e:
-        log.error("Ошибка загрузки %s: %s", url, e)
+        log.warning("Ошибка загрузки %s: %s", url, e, exc_info=True)
         return []

@@ -45,7 +45,7 @@ def get_geo_info(address: str) -> dict:
             return result
         log.debug("Geo lookup failed for %s: %s", ip, data.get("message", "unknown"))
     except Exception as e:
-        log.debug("Geo lookup error for %s: %s", address, e)
+        log.warning("Geo lookup error for %s: %s", address, e)
 
     return {"country": "Unknown", "code": "UN", "isp": "Unknown", "ip": address}
 

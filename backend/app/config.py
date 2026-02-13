@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Server
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8052
     debug: bool = False
     base_path: str = "/vpn-monitor"
@@ -23,16 +23,14 @@ class Settings(BaseSettings):
     # Checking
     max_configs_per_source: int = 150
     parallel_sources: int = 3
-    parallel_tests: int = 6
     inter_test_delay: float = 0.3
     check_interval: int = 21600
 
     # Geo
     geo_cache_ttl: int = 3600
 
-    # Rate limiting
-    rate_limit_check: int = 2
-    rate_limit_test: int = 5
+    # Rate limiting (per real client IP, requests per minute)
+    rate_limit_test: int = 20
 
     # Data
     data_dir: str = os.path.join(os.path.dirname(__file__), "..", "data")

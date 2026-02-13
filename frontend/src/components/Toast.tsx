@@ -39,7 +39,7 @@ export function ToastContainer() {
   const remove = (id: number) => setItems((prev) => prev.filter((t) => t.id !== id));
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
+    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm" aria-live="polite" role="status">
       {items.map((t) => (
         <div
           key={t.id}

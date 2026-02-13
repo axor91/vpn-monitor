@@ -27,12 +27,14 @@ def get_lock() -> threading.Lock:
 
 
 def save() -> None:
-    """Persist data to disk."""
+    """Persist data to disk atomically (temp file + rename)."""
     os.makedirs(settings.data_dir, exist_ok=True)
     path = os.path.join(settings.data_dir, settings.data_file)
+    tmp_path = path + ".tmp"
     with _lock:
-        with open(path, "w", encoding="utf-8") as f:
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(_data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, path)
 
 
 def load() -> None:

@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   backend:
     build:
@@ -11,7 +9,7 @@ services:
     volumes:
       - vpn_data:/app/data
     environment:
-      - VPN_HOST=0.0.0.0
+      - VPN_HOST=127.0.0.1
       - VPN_PORT=8052
       - VPN_BASE_PATH=/vpn-monitor
       - VPN_FRONTEND_URL=http://127.0.0.1:3052

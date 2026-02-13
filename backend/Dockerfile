@@ -7,10 +7,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl unzip ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Download xray-core
+# Download xray-core (pinned version)
 ARG XRAY_VERSION=1.8.24
 RUN curl -fsSL "https://github.com/XTLS/Xray-core/releases/download/v${XRAY_VERSION}/Xray-linux-64.zip" -o /tmp/xray.zip \
     && mkdir -p /app/xray \
+    && unzip -t /tmp/xray.zip \
     && unzip /tmp/xray.zip -d /app/xray \
     && chmod +x /app/xray/xray \
     && rm /tmp/xray.zip
@@ -22,14 +23,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy app
 COPY . .
 
-# Data volume
-RUN mkdir -p /app/data
+# Non-root user
+RUN groupadd --system appgroup && useradd --system --gid appgroup appuser \
+    && mkdir -p /app/data && chown -R appuser:appgroup /app/data
 
 ENV VPN_XRAY_PATH=/app/xray/xray
 ENV VPN_DATA_DIR=/app/data
-ENV VPN_HOST=0.0.0.0
+ENV VPN_HOST=127.0.0.1
 ENV VPN_PORT=8052
+
+USER appuser
 
 EXPOSE 8052
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8052", "--workers", "1"]
+CMD ["uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8052", "--workers", "1"]

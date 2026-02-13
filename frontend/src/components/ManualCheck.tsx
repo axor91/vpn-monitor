@@ -45,6 +45,11 @@ export function ManualCheck() {
         items[i] = { ...items[i], result, loading: false };
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Ошибка";
+        if (msg.includes("429") || msg.includes("Слишком много")) {
+          await new Promise((r) => setTimeout(r, 5000));
+          i--;
+          continue;
+        }
         items[i] = { ...items[i], result: { status: "error", msg }, loading: false };
       }
       setResults([...items]);

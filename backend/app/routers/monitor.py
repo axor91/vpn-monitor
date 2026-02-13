@@ -1,5 +1,9 @@
-"""API routes for VPN monitoring — status, results, summary, check control."""
+"""API routes for VPN monitoring — status, results, summary, test link."""
 
+import asyncio
+import ipaddress
+import logging
+import socket
 import threading
 import time
 from collections import defaultdict
@@ -8,27 +12,49 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from ..config import settings
-from ..models import StatusResponse, SummaryResponse, TestLinkRequest
+from ..models import StatusResponse, TestLinkRequest
 from ..sources import SUBSCRIPTION_SOURCES
-from ..services import storage, checker
+from ..services import storage
 from ..services.parser import parse_link
 from ..services.xray import run_test
 
+log = logging.getLogger("vpn.router")
+
 router = APIRouter(prefix="/api")
 
-# Rate limiting
+# Rate limiting (keyed by real client IP)
 _rate_limits: dict[str, list[float]] = defaultdict(list)
 _rate_lock = threading.Lock()
 
 
-def _check_rate(ip: str, limit: int) -> bool:
+def _get_client_ip(request: Request) -> str:
+    """Extract real client IP, respecting X-Real-IP / X-Forwarded-For from Nginx."""
+    ip = request.headers.get("x-real-ip")
+    if ip:
+        return ip
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _check_rate(key: str, limit: int) -> bool:
     now = time.time()
     with _rate_lock:
-        _rate_limits[ip] = [t for t in _rate_limits[ip] if now - t < 60]
-        if len(_rate_limits[ip]) >= limit:
+        _rate_limits[key] = [t for t in _rate_limits[key] if now - t < 60]
+        if len(_rate_limits[key]) >= limit:
             return False
-        _rate_limits[ip].append(now)
+        _rate_limits[key].append(now)
         return True
+
+
+def _is_private_address(address: str) -> bool:
+    """Check if an address resolves to a private/internal IP."""
+    try:
+        ip = socket.gethostbyname(address)
+        return ipaddress.ip_address(ip).is_private
+    except (socket.gaierror, ValueError):
+        return False
 
 
 @router.get("/status")
@@ -78,14 +104,6 @@ async def api_summary():
     return summary
 
 
-@router.get("/results")
-async def api_results():
-    data = storage.get_data()
-    lock = storage.get_lock()
-    with lock:
-        return data.get("sources", {})
-
-
 @router.get("/results/{source_id}")
 async def api_results_source(source_id: str):
     data = storage.get_data()
@@ -102,47 +120,24 @@ async def api_sources():
     return SUBSCRIPTION_SOURCES
 
 
-@router.post("/start_check")
-async def api_start_check(request: Request):
-    client_ip = request.client.host if request.client else "unknown"
-    if not _check_rate(f"check:{client_ip}", settings.rate_limit_check):
-        return JSONResponse({"error": "Слишком много запросов"}, status_code=429)
-
-    data = storage.get_data()
-    lock = storage.get_lock()
-    with lock:
-        if data["is_checking"]:
-            return JSONResponse({"error": "Проверка уже запущена"}, status_code=409)
-        data["is_checking"] = True
-
-    threading.Thread(
-        target=checker.check_all_sources,
-        args=(data, lock, storage.save),
-        kwargs={"_from_api": True},
-        daemon=True,
-    ).start()
-    return {"status": "ok", "msg": "Проверка запущена"}
-
-
-@router.post("/stop_check")
-async def api_stop_check():
-    data = storage.get_data()
-    if not data.get("is_checking"):
-        return JSONResponse({"error": "Проверка не запущена"}, status_code=409)
-    checker.request_stop()
-    return {"status": "ok", "msg": "Остановка запрошена"}
-
-
 @router.post("/test_link")
 async def api_test_link(body: TestLinkRequest, request: Request):
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = _get_client_ip(request)
     if not _check_rate(f"test:{client_ip}", settings.rate_limit_test):
         return JSONResponse({"error": "Слишком много запросов"}, status_code=429)
 
     outbound, addr = parse_link(body.link)
-    if not outbound:
-        return {"status": "error", "msg": "Неверная или неподдерживаемая ссылка"}
+    if not outbound or not addr:
+        return JSONResponse(
+            {"status": "error", "msg": "Неверная или неподдерживаемая ссылка"},
+            status_code=422,
+        )
 
-    import asyncio
+    if _is_private_address(addr):
+        return JSONResponse(
+            {"status": "error", "msg": "Приватные адреса запрещены"},
+            status_code=422,
+        )
+
     result = await asyncio.to_thread(run_test, outbound, addr)
     return result

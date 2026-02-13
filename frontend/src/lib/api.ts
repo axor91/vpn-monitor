@@ -83,8 +83,6 @@ export const api = {
   getStatus: () => fetchJSON<StatusData>("/status"),
   getResults: () => fetchJSON<Record<string, SourceData>>("/results"),
   getSource: (id: string) => fetchJSON<SourceData>(`/results/${id}`),
-  startCheck: () => fetchJSON<{ status: string; msg: string }>("/start_check", { method: "POST" }),
-  stopCheck: () => fetchJSON<{ status: string; msg: string }>("/stop_check", { method: "POST" }),
   testLink: (link: string) =>
     fetchJSON<TestResult>("/test_link", {
       method: "POST",
