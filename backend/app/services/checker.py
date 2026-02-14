@@ -9,8 +9,9 @@ from datetime import datetime
 from ..config import settings
 from ..sources import SUBSCRIPTION_SOURCES
 from .fetcher import fetch_subscription
-from .parser import detect_protocol, get_config_name, parse_link
+from .parser import detect_protocol, get_config_name, parse_link, extract_link_meta
 from .xray import run_test
+from ..whitelist_sni import is_whitelist_sni
 
 log = logging.getLogger("vpn.checker")
 
@@ -59,7 +60,12 @@ def check_single_source(
         proto = detect_protocol(link)
         name = get_config_name(link)
         outbound, address = parse_link(link)
+        meta = extract_link_meta(link)
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        shutdown_ready = (
+            meta["security"] == "reality" and is_whitelist_sni(meta["sni"])
+        )
 
         entry = {
             "link": link,
@@ -70,6 +76,9 @@ def check_single_source(
             "latency": None,
             "geo": None,
             "checked_at": now_str,
+            "security": meta["security"],
+            "sni": meta["sni"],
+            "shutdown_ready": shutdown_ready,
         }
 
         if outbound and address:

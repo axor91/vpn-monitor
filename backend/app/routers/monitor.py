@@ -82,6 +82,9 @@ async def api_summary():
             alive = [c for c in configs if c.get("status") == "success"]
             dead = [c for c in configs if c.get("status") == "error"]
             unsupported = [c for c in configs if c.get("status") == "unsupported"]
+            shutdown_ready = [
+                c for c in alive if c.get("shutdown_ready")
+            ]
             avg_latency = (
                 round(sum(c["latency"] for c in alive) / len(alive)) if alive else 0
             )
@@ -95,6 +98,7 @@ async def api_summary():
                 "alive": len(alive),
                 "dead": len(dead),
                 "unsupported": len(unsupported),
+                "shutdown_ready": len(shutdown_ready),
                 "avg_latency": avg_latency,
                 "fetched_at": src_data.get("fetched_at"),
             })

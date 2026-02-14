@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Check, RefreshCw } from "lucide-react";
+import { Copy, Check, RefreshCw, ShieldCheck } from "lucide-react";
 import type { ConfigEntry } from "@/lib/api";
 import { api } from "@/lib/api";
 import { cn, countryFlag, relativeTime, latencyColor, formatLatency } from "@/lib/utils";
@@ -58,7 +58,20 @@ export function ConfigRow({ config }: Props) {
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <div className="text-xs font-medium text-zinc-200 truncate">{c.name}</div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-zinc-200 truncate">{c.name}</span>
+          {c.shutdown_ready && (
+            <span className="shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-success/15 text-success text-[10px] font-bold" title={`Reality + ${c.sni}`}>
+              <ShieldCheck size={10} />
+              <span className="hidden sm:inline">откл.</span>
+            </span>
+          )}
+          {!c.shutdown_ready && c.security === "reality" && (
+            <span className="shrink-0 px-1.5 py-0.5 rounded bg-warn/15 text-warn text-[10px] font-bold" title={`Reality + ${c.sni || '?'}`}>
+              R
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap">
           <span className="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 rounded text-[10px] font-bold uppercase tracking-wider">
             {c.protocol}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Zap, XCircle, Signal } from "lucide-react";
+import { ChevronRight, Zap, XCircle, Signal, ShieldCheck } from "lucide-react";
 import type { SourceSummary, ConfigEntry } from "@/lib/api";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -16,7 +16,7 @@ export function SourceCard({ source, category }: Props) {
   const [open, setOpen] = useState(false);
   const [configs, setConfigs] = useState<ConfigEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<"all" | "alive" | "dead">("all");
+  const [filter, setFilter] = useState<"all" | "alive" | "dead" | "shutdown">("all");
   const toggle = async () => {
     if (open) {
       setOpen(false);
@@ -39,9 +39,13 @@ export function SourceCard({ source, category }: Props) {
     .filter((c) => {
       if (filter === "alive") return c.status === "success";
       if (filter === "dead") return c.status !== "success";
+      if (filter === "shutdown") return c.status === "success" && c.shutdown_ready;
       return true;
     })
     .sort((a, b) => {
+      // shutdown_ready alive first
+      if (a.shutdown_ready && !b.shutdown_ready) return -1;
+      if (!a.shutdown_ready && b.shutdown_ready) return 1;
       if (a.status === "success" && b.status !== "success") return -1;
       if (a.status !== "success" && b.status === "success") return 1;
       if (a.latency && b.latency) return a.latency - b.latency;
@@ -84,6 +88,12 @@ export function SourceCard({ source, category }: Props) {
               <Zap size={12} />
               {source.alive}
             </span>
+            {source.shutdown_ready > 0 && (
+              <span className="flex items-center gap-1 text-emerald-400">
+                <ShieldCheck size={12} />
+                {source.shutdown_ready}
+              </span>
+            )}
             <span className="flex items-center gap-1 text-danger">
               <XCircle size={12} />
               {source.dead}
@@ -104,7 +114,7 @@ export function SourceCard({ source, category }: Props) {
         <div className="border-t border-border animate-fade-in">
           {/* Filter bar */}
           <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/50 bg-bg/50">
-            {(["all", "alive", "dead"] as const).map((f) => (
+            {(["all", "alive", "shutdown", "dead"] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -115,7 +125,7 @@ export function SourceCard({ source, category }: Props) {
                     : "text-muted hover:text-zinc-300 hover:bg-zinc-800"
                 )}
               >
-                {f === "all" ? "Все" : f === "alive" ? "Живые" : "Мёртвые"}
+                {f === "all" ? "Все" : f === "alive" ? "Живые" : f === "shutdown" ? "Для откл." : "Мёртвые"}
               </button>
             ))}
           </div>

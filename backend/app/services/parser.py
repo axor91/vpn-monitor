@@ -24,6 +24,32 @@ def get_config_name(link: str) -> str:
     return "Config"
 
 
+def extract_link_meta(link: str) -> dict:
+    """Extract security and SNI metadata from a VPN link (without full parsing)."""
+    link = link.strip()
+    proto = detect_protocol(link)
+    meta = {"security": "", "sni": ""}
+
+    try:
+        if proto in ("vless", "trojan"):
+            if "?" in link:
+                params_part = link.split("?", 1)[1].split("#")[0]
+                params = urllib.parse.parse_qs(params_part)
+                meta["security"] = params.get("security", [""])[0]
+                meta["sni"] = params.get("sni", [""])[0]
+        elif proto == "vmess":
+            b64 = link.replace("vmess://", "").split("#")[0]
+            b64 += "=" * (4 - len(b64) % 4) if len(b64) % 4 else ""
+            data = json.loads(base64.b64decode(b64).decode("utf-8", errors="ignore"))
+            tls = data.get("tls", "")
+            meta["security"] = tls if tls else "none"
+            meta["sni"] = data.get("sni", data.get("host", ""))
+    except Exception:
+        pass
+
+    return meta
+
+
 def parse_link(link: str) -> tuple[dict | None, str | None]:
     link = link.strip()
     proto = detect_protocol(link)

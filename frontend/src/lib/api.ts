@@ -26,6 +26,9 @@ export interface ConfigEntry {
   geo: GeoInfo | null;
   error?: string;
   checked_at: string | null;
+  security?: string;
+  sni?: string;
+  shutdown_ready?: boolean;
 }
 
 export interface SourceData {
@@ -46,6 +49,7 @@ export interface SourceSummary {
   alive: number;
   dead: number;
   unsupported: number;
+  shutdown_ready: number;
   avg_latency: number;
   fetched_at: string | null;
 }
