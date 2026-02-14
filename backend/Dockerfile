@@ -27,13 +27,14 @@ COPY . .
 RUN groupadd --system appgroup && useradd --system --gid appgroup appuser \
     && mkdir -p /app/data && chown -R appuser:appgroup /app/data
 
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 ENV VPN_XRAY_PATH=/app/xray/xray
 ENV VPN_DATA_DIR=/app/data
 ENV VPN_HOST=127.0.0.1
 ENV VPN_PORT=8052
 
-USER appuser
-
 EXPOSE 8052
 
-CMD ["uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8052", "--workers", "1"]
+ENTRYPOINT ["/app/entrypoint.sh"]

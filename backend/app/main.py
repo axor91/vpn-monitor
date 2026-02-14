@@ -23,7 +23,10 @@ log = logging.getLogger("vpn.main")
 def _scheduler_loop(data_store: dict, data_lock, save_fn):
     """Background loop: run check_all_sources every check_interval seconds."""
     while True:
-        checker.check_all_sources(data_store, data_lock, save_fn)
+        try:
+            checker.check_all_sources(data_store, data_lock, save_fn)
+        except Exception as e:
+            log.error("Ошибка в планировщике: %s", e, exc_info=True)
         time.sleep(settings.check_interval)
 
 
