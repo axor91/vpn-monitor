@@ -1,5 +1,7 @@
 """Pydantic models for API requests/responses."""
 
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -10,7 +12,7 @@ class TestLinkRequest(BaseModel):
 class TestResult(BaseModel):
     status: str
     latency: int | None = None
-    geo: dict | None = None
+    geo: dict[str, Any] | None = None
     msg: str | None = None
 
 
@@ -21,7 +23,7 @@ class ConfigEntry(BaseModel):
     address: str
     status: str
     latency: int | None = None
-    geo: dict | None = None
+    geo: dict[str, Any] | None = None
     error: str | None = None
     checked_at: str | None = None
     security: str | None = None
@@ -30,7 +32,7 @@ class ConfigEntry(BaseModel):
 
 
 class SourceData(BaseModel):
-    info: dict
+    info: dict[str, Any]
     configs: list[ConfigEntry] = []
     total_links: int = 0
     fetched_at: str | None = None
@@ -56,11 +58,11 @@ class SummaryResponse(BaseModel):
     white: list[SourceSummary] = []
     last_update: str | None = None
     is_checking: bool = False
-    check_progress: dict = {}
+    check_progress: dict[str, Any] = {}
 
 
 class StatusResponse(BaseModel):
     last_update: str | None = None
     is_checking: bool = False
-    check_progress: dict = {}
+    check_progress: dict[str, Any] = {}
     sources_count: int = 0

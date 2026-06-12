@@ -3,7 +3,9 @@
 import logging
 import threading
 import time
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,7 +22,11 @@ logging.basicConfig(
 log = logging.getLogger("vpn.main")
 
 
-def _scheduler_loop(data_store: dict, data_lock, save_fn):
+def _scheduler_loop(
+    data_store: dict[str, Any],
+    data_lock: threading.Lock,
+    save_fn: Callable[[], None],
+) -> None:
     """Background loop: run check_all_sources every check_interval seconds."""
     while True:
         try:
@@ -31,7 +37,7 @@ def _scheduler_loop(data_store: dict, data_lock, save_fn):
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     cleanup_temp_files()
     storage.load()
 
@@ -71,5 +77,5 @@ app.include_router(monitor_router, prefix=settings.base_path)
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict[str, str]:
     return {"status": "ok"}

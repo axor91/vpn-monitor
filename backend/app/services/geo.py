@@ -4,6 +4,7 @@ import logging
 import socket
 import threading
 import time
+from typing import Any
 
 import httpx
 
@@ -11,11 +12,11 @@ from ..config import settings
 
 log = logging.getLogger("vpn.geo")
 
-_cache: dict[str, tuple[dict, float]] = {}
+_cache: dict[str, tuple[dict[str, Any], float]] = {}
 _lock = threading.Lock()
 
 
-def get_geo_info(address: str) -> dict:
+def get_geo_info(address: str) -> dict[str, Any]:
     """Resolve IP and fetch geo data, with caching."""
     ip = address
     try:

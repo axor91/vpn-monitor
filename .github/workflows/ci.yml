@@ -22,6 +22,8 @@ jobs:
           pip install -r requirements-dev.txt
       - name: Ruff
         run: ruff check app tests
+      - name: Mypy
+        run: mypy app
       - name: Pytest
         run: pytest
 
@@ -39,5 +41,7 @@ jobs:
         run: npm install
       - name: Typecheck
         run: npx tsc --noEmit
+      - name: Unit tests
+        run: npm run test
       - name: Build
         run: npx next build

@@ -4,7 +4,9 @@ import concurrent.futures
 import logging
 import threading
 import time
-from datetime import datetime
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from ..config import settings
 from ..sources import SUBSCRIPTION_SOURCES
@@ -19,10 +21,16 @@ log = logging.getLogger("vpn.checker")
 _stop_event = threading.Event()
 
 
+def _utcnow() -> str:
+    """Timestamp in explicit UTC (ISO8601 with Z) so the frontend can convert
+    to the viewer's local time without guessing the server timezone."""
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def check_single_source(
     source_id: str,
-    source_info: dict,
-    data_store: dict,
+    source_info: dict[str, Any],
+    data_store: dict[str, Any],
     data_lock: threading.Lock,
 ) -> tuple[int, int]:
     """Check one subscription source. Returns (alive, total)."""
@@ -38,7 +46,7 @@ def check_single_source(
             "info": source_info,
             "configs": list(old.get("configs", [])),
             "total_links": len(links),
-            "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "fetched_at": _utcnow(),
             "_checking": True,
         }
 
@@ -61,7 +69,7 @@ def check_single_source(
         name = get_config_name(link)
         outbound, address = parse_link(link)
         meta = extract_link_meta(link)
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now_str = _utcnow()
 
         shutdown_ready = (
             meta["security"] == "reality" and is_whitelist_sni(meta["sni"])
@@ -97,10 +105,9 @@ def check_single_source(
             time.sleep(settings.inter_test_delay)
         else:
             entry["status"] = "unsupported"
-            if proto in ("hysteria2", "hy2", "tuic"):
-                entry["error"] = f"Протокол {proto} не поддерживается"
-            else:
-                entry["error"] = "Ошибка парсинга"
+            entry["error"] = (
+                "Неизвестный протокол" if proto == "unknown" else "Ошибка парсинга"
+            )
 
         new_configs.append(entry)
         with data_lock:
@@ -117,9 +124,9 @@ def check_single_source(
 
 
 def check_all_sources(
-    data_store: dict,
+    data_store: dict[str, Any],
     data_lock: threading.Lock,
-    save_fn,
+    save_fn: Callable[[], None],
 ) -> None:
     """Run a full check of all subscription sources."""
     with data_lock:
@@ -160,7 +167,7 @@ def check_all_sources(
         log.error("Критическая ошибка в check_all_sources: %s", e, exc_info=True)
     finally:
         with data_lock:
-            data_store["last_update"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            data_store["last_update"] = _utcnow()
             data_store["is_checking"] = False
             data_store["check_progress"] = {}
             # Drop persisted sources that are no longer configured.

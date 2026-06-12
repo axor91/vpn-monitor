@@ -146,8 +146,78 @@ def test_extract_meta_vless_reality():
 
 
 def test_unsupported_protocol_returns_none():
-    outbound, address = parse_link("hysteria2://x@host:443")
+    outbound, address = parse_link("ssr://some-unsupported-blob")
     assert outbound is None and address is None
+
+
+# --- Hysteria2 (sing-box engine) -----------------------------------------
+
+
+def test_hysteria2_full():
+    link = (
+        "hysteria2://s3cret@1.2.3.4:443/"
+        "?sni=example.com&insecure=1&obfs=salamander&obfs-password=op#node"
+    )
+    outbound, address = parse_link(link)
+    assert address == "1.2.3.4"
+    assert outbound["_engine"] == "singbox"
+    assert outbound["type"] == "hysteria2"
+    assert outbound["server_port"] == 443
+    assert outbound["password"] == "s3cret"
+    assert outbound["tls"] == {
+        "enabled": True, "server_name": "example.com", "insecure": True,
+    }
+    assert outbound["obfs"] == {"type": "salamander", "password": "op"}
+
+
+def test_hy2_alias_no_obfs_default_secure():
+    outbound, address = parse_link("hy2://pw@host.example:8443?sni=host.example")
+    assert address == "host.example"
+    assert outbound["type"] == "hysteria2"
+    assert "obfs" not in outbound
+    assert outbound["tls"]["insecure"] is False
+    assert outbound["tls"]["server_name"] == "host.example"
+
+
+def test_hysteria2_sni_defaults_to_address():
+    outbound, _ = parse_link("hysteria2://pw@5.6.7.8:443")
+    assert outbound["tls"]["server_name"] == "5.6.7.8"
+
+
+def test_hysteria2_missing_userinfo_returns_none():
+    assert parse_link("hysteria2://host:443") == (None, None)
+
+
+# --- TUIC (sing-box engine) ----------------------------------------------
+
+
+def test_tuic_full():
+    link = (
+        "tuic://2dd61d93-75d8-4da4-ac0e-6aece7eac365:pass@1.2.3.4:443"
+        "?congestion_control=bbr&alpn=h3&sni=example.com&allow_insecure=1#node"
+    )
+    outbound, address = parse_link(link)
+    assert address == "1.2.3.4"
+    assert outbound["_engine"] == "singbox"
+    assert outbound["type"] == "tuic"
+    assert outbound["server_port"] == 443
+    assert outbound["uuid"] == "2dd61d93-75d8-4da4-ac0e-6aece7eac365"
+    assert outbound["password"] == "pass"
+    assert outbound["congestion_control"] == "bbr"
+    assert outbound["tls"]["alpn"] == ["h3"]
+    assert outbound["tls"]["insecure"] is True
+
+
+def test_tuic_defaults():
+    outbound, _ = parse_link("tuic://uuid:pw@host:443?sni=host")
+    assert outbound["congestion_control"] == "cubic"  # default
+    assert outbound["tls"]["alpn"] == ["h3"]           # default
+    assert outbound["tls"]["insecure"] is False
+
+
+def test_tuic_missing_password_returns_none():
+    # userinfo must be uuid:password
+    assert parse_link("tuic://just-uuid@host:443") == (None, None)
 
 
 @pytest.mark.parametrize("link", ["", "garbage", "vless://", "ss://"])

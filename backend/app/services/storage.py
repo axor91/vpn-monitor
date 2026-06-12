@@ -4,12 +4,13 @@ import json
 import logging
 import os
 import threading
+from typing import Any
 
 from ..config import settings
 
 log = logging.getLogger("vpn.storage")
 
-_data: dict = {
+_data: dict[str, Any] = {
     "last_update": None,
     "is_checking": False,
     "check_progress": {},
@@ -18,7 +19,7 @@ _data: dict = {
 _lock = threading.Lock()
 
 
-def get_data() -> dict:
+def get_data() -> dict[str, Any]:
     return _data
 
 

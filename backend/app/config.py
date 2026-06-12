@@ -12,8 +12,10 @@ class Settings(BaseSettings):
     debug: bool = False
     base_path: str = "/vpn-monitor"
 
-    # Xray
+    # Proxy engines
     xray_path: str = os.path.join(os.path.dirname(__file__), "..", "xray", "xray")
+    # sing-box handles hysteria2/tuic (QUIC) which xray-core 1.8.24 can't.
+    singbox_path: str = os.path.join(os.path.dirname(__file__), "..", "singbox", "sing-box")
     xray_startup_timeout: float = 5.0
     xray_test_timeout: float = 8.0
 

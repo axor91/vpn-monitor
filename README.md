@@ -11,12 +11,17 @@
 ## Что делает
 
 - **Скачивает** 8 подписок из [igareck/vpn-configs-for-russia](https://github.com/igareck/vpn-configs-for-russia) (белые + чёрные списки)
-- **Парсит** ссылки VLESS, VMess, Shadowsocks, Trojan (с поддержкой Reality, gRPC, WS, xHTTP, splitHTTP)
-- **Тестирует** каждый конфиг через Xray-core — запускает SOCKS-прокси, проверяет connectivity через Google/Cloudflare
+- **Парсит** ссылки VLESS, VMess, Shadowsocks, Trojan (Reality, gRPC, WS, xHTTP, splitHTTP) + Hysteria2, TUIC
+- **Тестирует** каждый конфиг через два движка — Xray-core (vless/vmess/ss/trojan) и sing-box (hysteria2/tuic, QUIC): поднимает SOCKS-прокси, проверяет connectivity через Google/Cloudflare
 - **Измеряет** латентность (мс), определяет геолокацию (страна, ISP, IP) через ipwho.is с кэшированием
 - **Категоризирует**: белые (CIDR/SNI для отключений мобильного) и чёрные (обычный VPN для YouTube/Discord/WhatsApp)
 - **Фоновый планировщик** — автоматическая проверка каждые 6 часов (`VPN_CHECK_INTERVAL`)
-- **Ручная проверка** — вставь любую vless/vmess/ss/trojan ссылку и проверь
+- **Ручная проверка** — вставь любую vless/vmess/ss/trojan/hysteria2/tuic ссылку и проверь
+
+> **Движки.** Парсер помечает каждый конфиг движком (`_engine`): `xray` или
+> `singbox`. Xray-core 1.8.24 не поддерживает QUIC-протоколы hysteria2/tuic,
+> поэтому для них в образе лежит второй бинарник — sing-box. Резолв адреса и
+> пиннинг global-IP (anti-SSRF/DNS-rebinding) общий для обоих движков.
 
 ---
 
@@ -33,13 +38,14 @@ vpn-monitor/
 │   │   ├── routers/
 │   │   │   └── monitor.py      # API endpoints (7 эндпоинтов)
 │   │   └── services/
-│   │       ├── parser.py       # Парсинг VLESS/VMess/SS/Trojan → Xray outbound
-│   │       ├── xray.py         # Xray-core runner + порт-менеджер
+│   │       ├── parser.py       # Парсинг VLESS/VMess/SS/Trojan/Hysteria2/TUIC → outbound + движок
+│   │       ├── xray.py         # Движки xray-core + sing-box, порт-менеджер
+│   │       ├── netguard.py     # SSRF-guard: резолв + блок не-global IP, пиннинг
 │   │       ├── geo.py          # Геолокация с in-memory TTL-кэшем
 │   │       ├── checker.py      # Оркестратор параллельной проверки
 │   │       ├── fetcher.py      # Загрузка и декодирование подписок
 │   │       └── storage.py      # Thread-safe JSON-хранилище
-│   ├── Dockerfile              # Python 3.12-slim + Xray-core 1.8.24
+│   ├── Dockerfile              # Python 3.12-slim + Xray-core 1.8.24 + sing-box 1.13.13
 │   ├── requirements.txt
 │   └── .env.example
 ├── frontend/                   # Next.js 14 + Tailwind CSS
@@ -71,8 +77,9 @@ vpn-monitor/
 
 | Модуль | Файл | Назначение |
 |--------|------|------------|
-| **Parser** | `services/parser.py` | Парсинг VPN-ссылок → Xray outbound JSON. Поддержка: VLESS (Reality, TLS, gRPC, WS, xHTTP, TCP), VMess, Shadowsocks, Trojan |
-| **Xray** | `services/xray.py` | Запуск Xray-core процесса, SOCKS-прокси, тест connectivity через 3 URL, замер латентности. Порт-менеджер с `socket.bind()` проверкой |
+| **Parser** | `services/parser.py` | Парсинг VPN-ссылок → outbound JSON + маркер движка (`_engine`). Xray: VLESS (Reality, TLS, gRPC, WS, xHTTP, TCP), VMess, Shadowsocks, Trojan. sing-box: Hysteria2, TUIC |
+| **Runner** | `services/xray.py` | Диспетчер движков (xray-core / sing-box) по `_engine`: temp-конфиг, SOCKS-прокси, тест connectivity через 3 URL, замер латентности. Порт-менеджер с `socket.bind()` |
+| **NetGuard** | `services/netguard.py` | SSRF-guard: резолв через `getaddrinfo`, блок не-global/multicast/reserved IP, пиннинг IP в outbound (anti-DNS-rebinding) |
 | **Geo** | `services/geo.py` | Геолокация через ipwho.is API. In-memory кэш с TTL (3600с). DNS-resolve → IP → geo lookup |
 | **Checker** | `services/checker.py` | Оркестратор: параллельная проверка 3 источников одновременно (`ThreadPoolExecutor`). Stop-event для остановки. Прогресс в реальном времени |
 | **Fetcher** | `services/fetcher.py` | HTTP-загрузка подписок, автодетект base64, фильтрация ссылок |

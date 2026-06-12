@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import urllib.parse
+from typing import Any
 
 log = logging.getLogger("vpn.parser")
 
@@ -24,7 +25,7 @@ def get_config_name(link: str) -> str:
     return "Config"
 
 
-def extract_link_meta(link: str) -> dict:
+def extract_link_meta(link: str) -> dict[str, str]:
     """Extract security and SNI metadata from a VPN link (without full parsing)."""
     link = link.strip()
     proto = detect_protocol(link)
@@ -50,7 +51,12 @@ def extract_link_meta(link: str) -> dict:
     return meta
 
 
-def parse_link(link: str) -> tuple[dict | None, str | None]:
+def parse_link(link: str) -> tuple[dict[str, Any] | None, str | None]:
+    """Parse a VPN link into an engine config + server address.
+
+    The returned config carries a private `_engine` key ("xray" | "singbox")
+    that the runner uses to pick the binary; it is stripped before launch.
+    """
     link = link.strip()
     proto = detect_protocol(link)
     parsers = {
@@ -58,6 +64,9 @@ def parse_link(link: str) -> tuple[dict | None, str | None]:
         "vmess": _parse_vmess,
         "ss": _parse_shadowsocks,
         "trojan": _parse_trojan,
+        "hysteria2": _parse_hysteria2,
+        "hy2": _parse_hysteria2,
+        "tuic": _parse_tuic,
     }
     if proto in parsers:
         return parsers[proto](link)
@@ -67,7 +76,7 @@ def parse_link(link: str) -> tuple[dict | None, str | None]:
 # ---------------------------------------------------------------------------
 # VLESS
 # ---------------------------------------------------------------------------
-def _parse_vless(link: str) -> tuple[dict | None, str | None]:
+def _parse_vless(link: str) -> tuple[dict[str, Any] | None, str | None]:
     try:
         if not link.startswith("vless://"):
             return None, None
@@ -85,7 +94,7 @@ def _parse_vless(link: str) -> tuple[dict | None, str | None]:
         port = port.split("/")[0]
         params = urllib.parse.parse_qs(params_part.split("#")[0])
 
-        outbound = {
+        outbound: dict[str, Any] = {
             "protocol": "vless",
             "settings": {
                 "vnext": [{
@@ -116,7 +125,7 @@ def _parse_vless(link: str) -> tuple[dict | None, str | None]:
                 "spiderX": params.get("spx", [""])[0],
             }
         elif security == "tls":
-            tls: dict = {
+            tls: dict[str, Any] = {
                 "serverName": params.get("sni", [""])[0],
                 "allowInsecure": True,
             }
@@ -133,7 +142,7 @@ def _parse_vless(link: str) -> tuple[dict | None, str | None]:
                 "serviceName": params.get("serviceName", [""])[0],
             }
         elif network == "ws":
-            ws: dict = {"path": params.get("path", ["/"])[0]}
+            ws: dict[str, Any] = {"path": params.get("path", ["/"])[0]}
             host = params.get("host", [""])[0]
             if host:
                 ws["headers"] = {"Host": host}
@@ -164,7 +173,7 @@ def _parse_vless(link: str) -> tuple[dict | None, str | None]:
 # ---------------------------------------------------------------------------
 # VMess
 # ---------------------------------------------------------------------------
-def _parse_vmess(link: str) -> tuple[dict | None, str | None]:
+def _parse_vmess(link: str) -> tuple[dict[str, Any] | None, str | None]:
     try:
         if not link.startswith("vmess://"):
             return None, None
@@ -181,7 +190,7 @@ def _parse_vmess(link: str) -> tuple[dict | None, str | None]:
         path = data.get("path", "/")
         host = data.get("host", "")
 
-        outbound = {
+        outbound: dict[str, Any] = {
             "protocol": "vmess",
             "settings": {
                 "vnext": [{
@@ -201,7 +210,7 @@ def _parse_vmess(link: str) -> tuple[dict | None, str | None]:
                 "allowInsecure": True,
             }
         if net == "ws":
-            ws: dict = {"path": path}
+            ws: dict[str, Any] = {"path": path}
             if host:
                 ws["headers"] = {"Host": host}
             outbound["streamSettings"]["wsSettings"] = ws
@@ -218,7 +227,7 @@ def _parse_vmess(link: str) -> tuple[dict | None, str | None]:
 # ---------------------------------------------------------------------------
 # Shadowsocks
 # ---------------------------------------------------------------------------
-def _parse_shadowsocks(link: str) -> tuple[dict | None, str | None]:
+def _parse_shadowsocks(link: str) -> tuple[dict[str, Any] | None, str | None]:
     try:
         if not link.startswith("ss://"):
             return None, None
@@ -269,7 +278,7 @@ def _parse_shadowsocks(link: str) -> tuple[dict | None, str | None]:
 # ---------------------------------------------------------------------------
 # Trojan
 # ---------------------------------------------------------------------------
-def _parse_trojan(link: str) -> tuple[dict | None, str | None]:
+def _parse_trojan(link: str) -> tuple[dict[str, Any] | None, str | None]:
     try:
         if not link.startswith("trojan://"):
             return None, None
@@ -285,7 +294,7 @@ def _parse_trojan(link: str) -> tuple[dict | None, str | None]:
         address, port = host_port.rsplit(":", 1)
         params = urllib.parse.parse_qs(params_part.split("#")[0])
 
-        outbound = {
+        outbound: dict[str, Any] = {
             "protocol": "trojan",
             "settings": {
                 "servers": [{
@@ -308,4 +317,109 @@ def _parse_trojan(link: str) -> tuple[dict | None, str | None]:
         return outbound, address
     except Exception as e:
         log.debug("parse_trojan error: %s", e)
+        return None, None
+
+
+# ---------------------------------------------------------------------------
+# Helpers for the sing-box (QUIC) engine
+# ---------------------------------------------------------------------------
+def _truthy(value: str) -> bool:
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _split_host_port(host_port: str) -> tuple[str, int]:
+    """Split 'host:port' (also '[ipv6]:port'); raises on malformed input."""
+    host_port = host_port.split("/")[0]
+    address, port = host_port.rsplit(":", 1)
+    return address, int(port)
+
+
+# ---------------------------------------------------------------------------
+# Hysteria2 (sing-box engine)
+# URI scheme: hysteria2://<auth>@host:port/?sni=&insecure=&obfs=&obfs-password=
+# Official scheme: https://v2.hysteria.network/docs/developers/URI-Scheme/
+# ---------------------------------------------------------------------------
+def _parse_hysteria2(link: str) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        rest = link.split("://", 1)[1]
+        rest = rest.split("#", 1)[0]
+        if "@" not in rest:
+            return None, None
+        auth, host_part = rest.split("@", 1)
+        if "?" in host_part:
+            host_port, params_part = host_part.split("?", 1)
+        else:
+            host_port, params_part = host_part, ""
+        address, port = _split_host_port(host_port)
+        params = urllib.parse.parse_qs(params_part)
+        sni = params.get("sni", [""])[0]
+
+        outbound: dict[str, Any] = {
+            "_engine": "singbox",
+            "type": "hysteria2",
+            "server": address,
+            "server_port": port,
+            "password": urllib.parse.unquote(auth),
+            "tls": {
+                "enabled": True,
+                "server_name": sni or address,
+                "insecure": _truthy(params.get("insecure", ["0"])[0]),
+            },
+        }
+        obfs = params.get("obfs", [""])[0]
+        if obfs:
+            outbound["obfs"] = {
+                "type": obfs,
+                "password": params.get("obfs-password", [""])[0],
+            }
+        return outbound, address
+    except Exception as e:
+        log.debug("parse_hysteria2 error: %s", e)
+        return None, None
+
+
+# ---------------------------------------------------------------------------
+# TUIC v5 (sing-box engine)
+# URI scheme: tuic://<uuid>:<password>@host:port?congestion_control=&sni=&alpn=&allow_insecure=
+# No official spec — community convention (v2rayN / NekoBox share links).
+# ---------------------------------------------------------------------------
+def _parse_tuic(link: str) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        rest = link.split("://", 1)[1]
+        rest = rest.split("#", 1)[0]
+        if "@" not in rest:
+            return None, None
+        userinfo, host_part = rest.split("@", 1)
+        if ":" not in userinfo:
+            return None, None
+        uid, password = userinfo.split(":", 1)
+        if "?" in host_part:
+            host_port, params_part = host_part.split("?", 1)
+        else:
+            host_port, params_part = host_part, ""
+        address, port = _split_host_port(host_port)
+        params = urllib.parse.parse_qs(params_part)
+        sni = params.get("sni", [""])[0]
+        cc = params.get("congestion_control", ["cubic"])[0] or "cubic"
+        insecure = _truthy(
+            params.get("allow_insecure", params.get("insecure", ["0"]))[0]
+        )
+
+        tls: dict[str, Any] = {"enabled": True, "server_name": sni or address, "insecure": insecure}
+        alpn = params.get("alpn", [""])[0]
+        tls["alpn"] = alpn.split(",") if alpn else ["h3"]
+
+        outbound: dict[str, Any] = {
+            "_engine": "singbox",
+            "type": "tuic",
+            "server": address,
+            "server_port": port,
+            "uuid": urllib.parse.unquote(uid),
+            "password": urllib.parse.unquote(password),
+            "congestion_control": cc,
+            "tls": tls,
+        }
+        return outbound, address
+    except Exception as e:
+        log.debug("parse_tuic error: %s", e)
         return None, None

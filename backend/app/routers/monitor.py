@@ -5,6 +5,7 @@ import logging
 import threading
 import time
 from collections import defaultdict
+from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -67,7 +68,7 @@ def _check_rate(key: str, limit: int) -> bool:
 
 
 @router.get("/status", response_model=StatusResponse)
-async def api_status():
+async def api_status() -> StatusResponse:
     data = storage.get_data()
     lock = storage.get_lock()
     with lock:
@@ -80,11 +81,11 @@ async def api_status():
 
 
 @router.get("/summary", response_model=SummaryResponse)
-async def api_summary():
+async def api_summary() -> dict[str, Any]:
     data = storage.get_data()
     lock = storage.get_lock()
     with lock:
-        summary: dict = {"black": [], "white": []}
+        summary: dict[str, Any] = {"black": [], "white": []}
         for source_id, source_info in SUBSCRIPTION_SOURCES.items():
             src_data = data["sources"].get(source_id, {})
             configs = src_data.get("configs", [])
@@ -118,7 +119,7 @@ async def api_summary():
 
 
 @router.get("/results/{source_id}")
-async def api_results_source(source_id: str):
+async def api_results_source(source_id: str) -> Any:
     data = storage.get_data()
     lock = storage.get_lock()
     with lock:
@@ -129,12 +130,12 @@ async def api_results_source(source_id: str):
 
 
 @router.get("/sources")
-async def api_sources():
+async def api_sources() -> dict[str, dict[str, str]]:
     return SUBSCRIPTION_SOURCES
 
 
 @router.post("/test_link", response_model=TestResult)
-async def api_test_link(body: TestLinkRequest, request: Request):
+async def api_test_link(body: TestLinkRequest, request: Request) -> Any:
     client_ip = _get_client_ip(request)
     if not _check_rate(f"test:{client_ip}", settings.rate_limit_test):
         return JSONResponse({"error": "Слишком много запросов"}, status_code=429)

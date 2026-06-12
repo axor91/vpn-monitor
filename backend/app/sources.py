@@ -2,7 +2,7 @@
 
 RAW_BASE = "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main"
 
-SUBSCRIPTION_SOURCES: dict[str, dict] = {
+SUBSCRIPTION_SOURCES: dict[str, dict[str, str]] = {
     "BLACK_VLESS_mobile": {
         "url": f"{RAW_BASE}/BLACK_VLESS_RUS_mobile.txt",
         "category": "black",

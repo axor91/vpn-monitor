@@ -1,4 +1,9 @@
-"""Xray-core test runner with port management."""
+"""Proxy test runner with port management.
+
+Dispatches to one of two engines based on the parsed config's `_engine` marker:
+xray-core (vless/vmess/ss/trojan) or sing-box (hysteria2/tuic, QUIC-based).
+Both spin up a local SOCKS inbound and probe connectivity through it.
+"""
 
 import copy
 import json
@@ -10,6 +15,7 @@ import tempfile
 import threading
 import time
 import uuid
+from typing import Any
 
 import httpx
 
@@ -54,78 +60,101 @@ def _wait_for_port(port: int, timeout: float | None = None) -> bool:
     return False
 
 
-def _pin_outbound_address(outbound: dict, ip: str) -> None:
-    """Replace server address with the already-validated IP so Xray cannot
+def _pin_xray_address(outbound: dict[str, Any], ip: str) -> None:
+    """Replace server address with the already-validated IP so the engine cannot
     re-resolve the hostname to something else (DNS rebinding)."""
     s = outbound.get("settings", {})
     for server in s.get("vnext", []) + s.get("servers", []):
         server["address"] = ip
 
 
-def run_test(outbound_config: dict, address: str) -> dict:
-    """Start xray with the given outbound, test connectivity, return result."""
-    ip = resolve_global_ip(address)
-    if ip is None:
-        return {"status": "error", "msg": "Адрес не резолвится или запрещён"}
-    outbound_config = copy.deepcopy(outbound_config)
-    _pin_outbound_address(outbound_config, ip)
+def _tmp_dir() -> str:
+    d = os.path.join(tempfile.gettempdir(), "vpn_monitor")
+    os.makedirs(d, exist_ok=True)
+    return d
 
-    port = _get_free_port()
 
-    xray_config = {
-        "log": {"loglevel": "error"},
-        "inbounds": [{"port": port, "protocol": "socks", "settings": {"auth": "noauth"}}],
-        "outbounds": [outbound_config],
-    }
+def _probe(port: int, ip: str) -> dict[str, Any]:
+    """Probe connectivity through the local SOCKS proxy on `port`."""
+    proxy = f"socks5://127.0.0.1:{port}"
+    for check_url in settings.check_urls:
+        try:
+            start = time.time()
+            r = httpx.get(check_url, proxy=proxy, timeout=settings.xray_test_timeout)
+            duration = round((time.time() - start) * 1000)
+            if r.status_code in (200, 204):
+                return {"status": "success", "latency": duration, "geo": get_geo_info(ip)}
+        except Exception:
+            continue
+    return {"status": "error", "msg": "Не удалось подключиться"}
 
-    tmp_dir = os.path.join(tempfile.gettempdir(), "vpn_monitor")
-    os.makedirs(tmp_dir, exist_ok=True)
-    config_path = os.path.join(tmp_dir, f"xray_{uuid.uuid4().hex[:8]}.json")
+
+def _terminate(proc: "subprocess.Popen[bytes]") -> None:
+    proc.terminate()
+    try:
+        proc.wait(timeout=3)
+    except Exception:
+        proc.kill()
+        proc.wait()
+
+
+def _run_engine(cmd: list[str], config: dict[str, Any], config_path: str, port: int, ip: str,
+                engine_label: str) -> dict[str, Any]:
+    """Write `config` to disk, launch `cmd`, wait for the SOCKS port, probe."""
     proc = None
-
     try:
         with open(config_path, "w") as f:
-            json.dump(xray_config, f)
-
-        proc = subprocess.Popen(
-            [settings.xray_path, "-c", config_path],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
+            json.dump(config, f)
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if not _wait_for_port(port):
-            return {"status": "error", "msg": "Xray не запустился"}
-
-        proxy = f"socks5://127.0.0.1:{port}"
-        for check_url in settings.check_urls:
-            try:
-                start = time.time()
-                r = httpx.get(check_url, proxy=proxy, timeout=settings.xray_test_timeout)
-                duration = round((time.time() - start) * 1000)
-                if r.status_code in (200, 204):
-                    geo = get_geo_info(ip)
-                    return {"status": "success", "latency": duration, "geo": geo}
-            except Exception:
-                continue
-
-        return {"status": "error", "msg": "Не удалось подключиться"}
-
+            return {"status": "error", "msg": f"{engine_label} не запустился"}
+        return _probe(port, ip)
     except Exception as e:
-        log.debug("run_test error for %s: %s", address, e)
+        log.debug("run_test error (%s): %s", engine_label, e)
         return {"status": "error", "msg": str(e)}
-
     finally:
         if proc:
-            proc.terminate()
-            try:
-                proc.wait(timeout=3)
-            except Exception:
-                proc.kill()
-                proc.wait()
+            _terminate(proc)
         try:
             os.remove(config_path)
         except OSError:
             pass
+
+
+def _run_xray(outbound: dict[str, Any], port: int, ip: str) -> dict[str, Any]:
+    _pin_xray_address(outbound, ip)
+    xray_config = {
+        "log": {"loglevel": "error"},
+        "inbounds": [{"port": port, "protocol": "socks", "settings": {"auth": "noauth"}}],
+        "outbounds": [outbound],
+    }
+    path = os.path.join(_tmp_dir(), f"xray_{uuid.uuid4().hex[:8]}.json")
+    return _run_engine([settings.xray_path, "-c", path], xray_config, path, port, ip, "Xray")
+
+
+def _run_singbox(outbound: dict[str, Any], port: int, ip: str) -> dict[str, Any]:
+    outbound["server"] = ip  # pin resolved IP (DNS-rebinding guard)
+    sb_config = {
+        "log": {"level": "error"},
+        "inbounds": [{"type": "socks", "listen": "127.0.0.1", "listen_port": port}],
+        "outbounds": [outbound],
+    }
+    path = os.path.join(_tmp_dir(), f"singbox_{uuid.uuid4().hex[:8]}.json")
+    return _run_engine([settings.singbox_path, "run", "-c", path], sb_config, path, port, ip,
+                       "sing-box")
+
+
+def run_test(config: dict[str, Any], address: str) -> dict[str, Any]:
+    """Start the right engine for the parsed config, test connectivity, return result."""
+    ip = resolve_global_ip(address)
+    if ip is None:
+        return {"status": "error", "msg": "Адрес не резолвится или запрещён"}
+    config = copy.deepcopy(config)
+    engine = config.pop("_engine", "xray")
+    port = _get_free_port()
+    if engine == "singbox":
+        return _run_singbox(config, port, ip)
+    return _run_xray(config, port, ip)
 
 
 def cleanup_temp_files() -> None:
@@ -134,7 +163,7 @@ def cleanup_temp_files() -> None:
     try:
         if os.path.isdir(tmp_dir):
             for f in os.listdir(tmp_dir):
-                if f.startswith("xray_") and f.endswith(".json"):
+                if (f.startswith("xray_") or f.startswith("singbox_")) and f.endswith(".json"):
                     try:
                         os.remove(os.path.join(tmp_dir, f))
                     except OSError:
