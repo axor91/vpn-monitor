@@ -1,9 +1,7 @@
 """API routes for VPN monitoring — status, results, summary, test link."""
 
 import asyncio
-import ipaddress
 import logging
-import socket
 import threading
 import time
 from collections import defaultdict
@@ -12,11 +10,11 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from ..config import settings
-from ..models import StatusResponse, TestLinkRequest
-from ..sources import SUBSCRIPTION_SOURCES
+from ..models import StatusResponse, SummaryResponse, TestLinkRequest, TestResult
 from ..services import storage
 from ..services.parser import parse_link
 from ..services.xray import run_test
+from ..sources import SUBSCRIPTION_SOURCES
 
 log = logging.getLogger("vpn.router")
 
@@ -25,22 +23,42 @@ router = APIRouter(prefix="/api")
 # Rate limiting (keyed by real client IP)
 _rate_limits: dict[str, list[float]] = defaultdict(list)
 _rate_lock = threading.Lock()
+_rate_last_gc = 0.0
+_RATE_GC_INTERVAL = 300
+
+# Backend is reachable only via the local reverse proxy (nginx / next rewrite),
+# so X-Real-IP is trusted only when the TCP peer is loopback.
+_TRUSTED_PEERS = {"127.0.0.1", "::1"}
 
 
 def _get_client_ip(request: Request) -> str:
-    """Extract real client IP, respecting X-Real-IP / X-Forwarded-For from Nginx."""
-    ip = request.headers.get("x-real-ip")
-    if ip:
-        return ip
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    """Extract the real client IP.
+
+    Honour X-Real-IP / X-Forwarded-For only when the TCP peer is the local
+    reverse proxy; otherwise a client could spoof the header to dodge rate
+    limits. Nginx overwrites X-Real-IP with $remote_addr.
+    """
+    peer = request.client.host if request.client else "unknown"
+    if peer in _TRUSTED_PEERS:
+        ip = request.headers.get("x-real-ip")
+        if ip:
+            return ip.strip()
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return peer
 
 
 def _check_rate(key: str, limit: int) -> bool:
+    """Sliding-window limiter. Periodically sweeps stale keys so spoofed or
+    rotating IPs cannot grow the dict without bound."""
+    global _rate_last_gc
     now = time.time()
     with _rate_lock:
+        if now - _rate_last_gc >= _RATE_GC_INTERVAL:
+            for k in [k for k, ts in _rate_limits.items() if not ts or now - ts[-1] >= 60]:
+                del _rate_limits[k]
+            _rate_last_gc = now
         _rate_limits[key] = [t for t in _rate_limits[key] if now - t < 60]
         if len(_rate_limits[key]) >= limit:
             return False
@@ -48,16 +66,7 @@ def _check_rate(key: str, limit: int) -> bool:
         return True
 
 
-def _is_private_address(address: str) -> bool:
-    """Check if an address resolves to a private/internal IP."""
-    try:
-        ip = socket.gethostbyname(address)
-        return ipaddress.ip_address(ip).is_private
-    except (socket.gaierror, ValueError):
-        return False
-
-
-@router.get("/status")
+@router.get("/status", response_model=StatusResponse)
 async def api_status():
     data = storage.get_data()
     lock = storage.get_lock()
@@ -70,7 +79,7 @@ async def api_status():
         )
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=SummaryResponse)
 async def api_summary():
     data = storage.get_data()
     lock = storage.get_lock()
@@ -124,7 +133,7 @@ async def api_sources():
     return SUBSCRIPTION_SOURCES
 
 
-@router.post("/test_link")
+@router.post("/test_link", response_model=TestResult)
 async def api_test_link(body: TestLinkRequest, request: Request):
     client_ip = _get_client_ip(request)
     if not _check_rate(f"test:{client_ip}", settings.rate_limit_test):
@@ -137,11 +146,6 @@ async def api_test_link(body: TestLinkRequest, request: Request):
             status_code=422,
         )
 
-    if _is_private_address(addr):
-        return JSONResponse(
-            {"status": "error", "msg": "Приватные адреса запрещены"},
-            status_code=422,
-        )
-
+    # SSRF guard (resolve + global-IP pinning) lives in run_test/netguard.
     result = await asyncio.to_thread(run_test, outbound, addr)
     return result

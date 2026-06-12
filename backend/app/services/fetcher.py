@@ -8,12 +8,25 @@ import httpx
 log = logging.getLogger("vpn.fetcher")
 
 
+# Cap the download so a misbehaving/compromised source can't exhaust memory.
+MAX_SUBSCRIPTION_BYTES = 8 * 1024 * 1024
+
+
 def fetch_subscription(url: str) -> list[str]:
     """Download a subscription URL and return a list of VPN links."""
     try:
-        r = httpx.get(url, timeout=15, follow_redirects=True)
-        r.raise_for_status()
-        text = r.text.strip()
+        with httpx.stream("GET", url, timeout=15, follow_redirects=True) as r:
+            r.raise_for_status()
+            chunks: list[bytes] = []
+            total = 0
+            for chunk in r.iter_bytes():
+                total += len(chunk)
+                if total > MAX_SUBSCRIPTION_BYTES:
+                    log.warning("Подписка %s превышает лимит %d байт, обрезаем",
+                                url, MAX_SUBSCRIPTION_BYTES)
+                    break
+                chunks.append(chunk)
+        text = b"".join(chunks).decode("utf-8", errors="ignore").strip()
 
         # Try base64 decode
         try:

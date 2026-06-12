@@ -1,5 +1,6 @@
 """Xray-core test runner with port management."""
 
+import copy
 import json
 import logging
 import os
@@ -14,6 +15,7 @@ import httpx
 
 from ..config import settings
 from .geo import get_geo_info
+from .netguard import resolve_global_ip
 
 log = logging.getLogger("vpn.xray")
 
@@ -52,8 +54,22 @@ def _wait_for_port(port: int, timeout: float | None = None) -> bool:
     return False
 
 
+def _pin_outbound_address(outbound: dict, ip: str) -> None:
+    """Replace server address with the already-validated IP so Xray cannot
+    re-resolve the hostname to something else (DNS rebinding)."""
+    s = outbound.get("settings", {})
+    for server in s.get("vnext", []) + s.get("servers", []):
+        server["address"] = ip
+
+
 def run_test(outbound_config: dict, address: str) -> dict:
     """Start xray with the given outbound, test connectivity, return result."""
+    ip = resolve_global_ip(address)
+    if ip is None:
+        return {"status": "error", "msg": "Адрес не резолвится или запрещён"}
+    outbound_config = copy.deepcopy(outbound_config)
+    _pin_outbound_address(outbound_config, ip)
+
     port = _get_free_port()
 
     xray_config = {
@@ -87,7 +103,7 @@ def run_test(outbound_config: dict, address: str) -> dict:
                 r = httpx.get(check_url, proxy=proxy, timeout=settings.xray_test_timeout)
                 duration = round((time.time() - start) * 1000)
                 if r.status_code in (200, 204):
-                    geo = get_geo_info(address)
+                    geo = get_geo_info(ip)
                     return {"status": "success", "latency": duration, "geo": geo}
             except Exception:
                 continue
@@ -105,6 +121,7 @@ def run_test(outbound_config: dict, address: str) -> dict:
                 proc.wait(timeout=3)
             except Exception:
                 proc.kill()
+                proc.wait()
         try:
             os.remove(config_path)
         except OSError:

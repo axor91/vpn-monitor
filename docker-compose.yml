@@ -30,7 +30,10 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://127.0.0.1:8052
       - PORT=3052
-      - HOSTNAME=0.0.0.0
+      # Bind to loopback: only the local Nginx reverse proxy should reach the
+      # frontend. Exposing :3052 lets external clients hit the Next /api rewrite
+      # → backend, which then trusts spoofable X-Real-IP as a loopback peer.
+      - HOSTNAME=127.0.0.1
     depends_on:
       backend:
         condition: service_healthy
