@@ -35,7 +35,7 @@ export function ConfigRow({ config }: Props) {
         latency: result.latency ?? null,
         geo: result.geo ?? prev.geo,
         error: result.msg,
-        checked_at: new Date().toISOString().replace("T", " ").slice(0, 19),
+        checked_at: new Date().toISOString().slice(0, 19) + "Z",
       }));
     } catch {
       // silent

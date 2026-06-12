@@ -5,10 +5,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Backend timestamps are UTC. Parse ISO with an explicit zone as-is; treat a
+// zone-less string (older data, or "YYYY-MM-DD HH:MM:SS") as UTC rather than
+// browser-local, otherwise "X ago" is off by the viewer's UTC offset.
+function parseBackendTime(dt: string): Date {
+  const iso = dt.includes("T") ? dt : dt.replace(" ", "T");
+  const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso);
+  return new Date(hasZone ? iso : iso + "Z");
+}
+
 export function relativeTime(dt: string | null): string {
   if (!dt) return "—";
   try {
-    const d = new Date(dt.replace(" ", "T"));
+    const d = parseBackendTime(dt);
     const now = new Date();
     const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
     if (diff < 60) return `${diff}с назад`;
