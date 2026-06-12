@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .routers.monitor import router as monitor_router
-from .services import storage, checker
+from .services import checker, storage
 from .services.xray import cleanup_temp_files
 
 logging.basicConfig(

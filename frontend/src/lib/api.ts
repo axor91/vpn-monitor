@@ -68,13 +68,6 @@ export interface SummaryData {
   check_progress: Record<string, ProgressEntry>;
 }
 
-export interface StatusData {
-  last_update: string | null;
-  is_checking: boolean;
-  check_progress: Record<string, ProgressEntry>;
-  sources_count: number;
-}
-
 export interface TestResult {
   status: string;
   latency?: number;
@@ -84,8 +77,6 @@ export interface TestResult {
 
 export const api = {
   getSummary: () => fetchJSON<SummaryData>("/summary"),
-  getStatus: () => fetchJSON<StatusData>("/status"),
-  getResults: () => fetchJSON<Record<string, SourceData>>("/results"),
   getSource: (id: string) => fetchJSON<SourceData>(`/results/${id}`),
   testLink: (link: string) =>
     fetchJSON<TestResult>("/test_link", {

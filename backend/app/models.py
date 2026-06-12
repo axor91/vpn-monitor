@@ -24,6 +24,9 @@ class ConfigEntry(BaseModel):
     geo: dict | None = None
     error: str | None = None
     checked_at: str | None = None
+    security: str | None = None
+    sni: str | None = None
+    shutdown_ready: bool = False
 
 
 class SourceData(BaseModel):
@@ -43,6 +46,7 @@ class SourceSummary(BaseModel):
     alive: int = 0
     dead: int = 0
     unsupported: int = 0
+    shutdown_ready: int = 0
     avg_latency: int = 0
     fetched_at: str | None = None
 

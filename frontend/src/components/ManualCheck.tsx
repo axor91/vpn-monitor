@@ -39,18 +39,27 @@ export function ManualCheck() {
     });
     setResults([...items]);
 
+    const MAX_RATE_RETRIES = 3;
     for (let i = 0; i < items.length; i++) {
-      try {
-        const result = await api.testLink(items[i].link);
-        items[i] = { ...items[i], result, loading: false };
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Ошибка";
-        if (msg.includes("429") || msg.includes("Слишком много")) {
-          await new Promise((r) => setTimeout(r, 5000));
-          i--;
-          continue;
+      let retries = 0;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        try {
+          const result = await api.testLink(items[i].link);
+          items[i] = { ...items[i], result, loading: false };
+          break;
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : "Ошибка";
+          const rateLimited = msg.includes("429") || msg.includes("Слишком много");
+          if (rateLimited && retries < MAX_RATE_RETRIES) {
+            retries++;
+            await new Promise((r) => setTimeout(r, 5000));
+            continue;
+          }
+          const finalMsg = rateLimited ? "Лимит запросов, попробуйте позже" : msg;
+          items[i] = { ...items[i], result: { status: "error", msg: finalMsg }, loading: false };
+          break;
         }
-        items[i] = { ...items[i], result: { status: "error", msg }, loading: false };
       }
       setResults([...items]);
     }

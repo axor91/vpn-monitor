@@ -27,14 +27,19 @@ def get_lock() -> threading.Lock:
 
 
 def save() -> None:
-    """Persist data to disk atomically (temp file + rename)."""
+    """Persist data to disk atomically (temp file + rename).
+
+    Serialize the snapshot under the lock, then write to disk without it so
+    concurrent API readers aren't blocked on file I/O.
+    """
     os.makedirs(settings.data_dir, exist_ok=True)
     path = os.path.join(settings.data_dir, settings.data_file)
     tmp_path = path + ".tmp"
     with _lock:
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(_data, f, ensure_ascii=False, indent=2)
-        os.replace(tmp_path, path)
+        payload = json.dumps(_data, ensure_ascii=False, indent=2)
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        f.write(payload)
+    os.replace(tmp_path, path)
 
 
 def load() -> None:
@@ -43,7 +48,7 @@ def load() -> None:
     path = os.path.join(settings.data_dir, settings.data_file)
     if os.path.exists(path):
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 _data.update(json.load(f))
             _data["is_checking"] = False
             _data["check_progress"] = {}

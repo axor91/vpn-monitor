@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight, Zap, XCircle, Signal, ShieldCheck } from "lucide-react";
 import type { SourceSummary, ConfigEntry } from "@/lib/api";
 import { api } from "@/lib/api";
@@ -10,30 +10,51 @@ import { ConfigRow } from "./ConfigRow";
 interface Props {
   source: SourceSummary;
   category: "white" | "black";
+  isChecking?: boolean;
 }
 
-export function SourceCard({ source, category }: Props) {
+export function SourceCard({ source, category, isChecking = false }: Props) {
   const [open, setOpen] = useState(false);
   const [configs, setConfigs] = useState<ConfigEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<"all" | "alive" | "dead" | "shutdown">("all");
-  const toggle = async () => {
+  // Track the data version we loaded so we can refresh after a re-check.
+  const loadedFetchedAt = useRef<string | null>(null);
+  const wasChecking = useRef(isChecking);
+
+  const loadConfigs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.getSource(source.id);
+      setConfigs(data.configs || []);
+      loadedFetchedAt.current = source.fetched_at;
+    } catch {
+      // keep previous
+    }
+    setLoading(false);
+  }, [source.id, source.fetched_at]);
+
+  const toggle = () => {
     if (open) {
       setOpen(false);
       return;
     }
     setOpen(true);
-    if (configs.length === 0) {
-      setLoading(true);
-      try {
-        const data = await api.getSource(source.id);
-        setConfigs(data.configs || []);
-      } catch {
-        // keep empty
-      }
-      setLoading(false);
+    if (configs.length === 0 || loadedFetchedAt.current !== source.fetched_at) {
+      void loadConfigs();
     }
   };
+
+  // Refresh the open card on new results. fetched_at alone is insufficient: the
+  // backend stamps it at the *start* of a re-check while configs are still
+  // partial, so also refetch when a check finishes (is_checking true → false).
+  useEffect(() => {
+    const justFinished = wasChecking.current && !isChecking;
+    wasChecking.current = isChecking;
+    if (open && (loadedFetchedAt.current !== source.fetched_at || justFinished)) {
+      void loadConfigs();
+    }
+  }, [open, source.fetched_at, isChecking, loadConfigs]);
 
   const filtered = configs
     .filter((c) => {

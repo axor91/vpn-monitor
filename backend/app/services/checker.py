@@ -8,10 +8,10 @@ from datetime import datetime
 
 from ..config import settings
 from ..sources import SUBSCRIPTION_SOURCES
-from .fetcher import fetch_subscription
-from .parser import detect_protocol, get_config_name, parse_link, extract_link_meta
-from .xray import run_test
 from ..whitelist_sni import is_whitelist_sni
+from .fetcher import fetch_subscription
+from .parser import detect_protocol, extract_link_meta, get_config_name, parse_link
+from .xray import run_test
 
 log = logging.getLogger("vpn.checker")
 
@@ -120,11 +120,10 @@ def check_all_sources(
     data_store: dict,
     data_lock: threading.Lock,
     save_fn,
-    _from_api: bool = False,
 ) -> None:
     """Run a full check of all subscription sources."""
     with data_lock:
-        if data_store["is_checking"] and not _from_api:
+        if data_store["is_checking"]:
             log.warning("Проверка уже запущена, пропускаем")
             return
         data_store["is_checking"] = True
@@ -164,6 +163,10 @@ def check_all_sources(
             data_store["last_update"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             data_store["is_checking"] = False
             data_store["check_progress"] = {}
+            # Drop persisted sources that are no longer configured.
+            stale = [s for s in data_store["sources"] if s not in SUBSCRIPTION_SOURCES]
+            for s in stale:
+                del data_store["sources"][s]
         save_fn()
 
 
@@ -171,7 +174,3 @@ def request_stop() -> bool:
     """Request the checker to stop. Returns True if a check was running."""
     _stop_event.set()
     return True
-
-
-def is_stop_requested() -> bool:
-    return _stop_event.is_set()

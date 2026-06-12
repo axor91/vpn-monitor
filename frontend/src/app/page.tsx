@@ -120,7 +120,7 @@ export default function HomePage() {
                     </div>
                   ) : (
                     (summary?.white || []).map((src) => (
-                      <SourceCard key={src.id} source={src} category="white" />
+                      <SourceCard key={src.id} source={src} category="white" isChecking={summary?.is_checking ?? false} />
                     ))
                   )}
                 </div>
@@ -146,7 +146,7 @@ export default function HomePage() {
                     </div>
                   ) : (
                     (summary?.black || []).map((src) => (
-                      <SourceCard key={src.id} source={src} category="black" />
+                      <SourceCard key={src.id} source={src} category="black" isChecking={summary?.is_checking ?? false} />
                     ))
                   )}
                 </div>
@@ -157,7 +157,7 @@ export default function HomePage() {
           {tab === "white" && (
             <div className="space-y-2 animate-fade-in">
               {(summary?.white || []).map((src) => (
-                <SourceCard key={src.id} source={src} category="white" />
+                <SourceCard key={src.id} source={src} category="white" isChecking={summary?.is_checking ?? false} />
               ))}
             </div>
           )}
@@ -165,7 +165,7 @@ export default function HomePage() {
           {tab === "black" && (
             <div className="space-y-2 animate-fade-in">
               {(summary?.black || []).map((src) => (
-                <SourceCard key={src.id} source={src} category="black" />
+                <SourceCard key={src.id} source={src} category="black" isChecking={summary?.is_checking ?? false} />
               ))}
             </div>
           )}
