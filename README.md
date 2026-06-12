@@ -15,7 +15,7 @@
 - **Тестирует** каждый конфиг через Xray-core — запускает SOCKS-прокси, проверяет connectivity через Google/Cloudflare
 - **Измеряет** латентность (мс), определяет геолокацию (страна, ISP, IP) через ipwho.is с кэшированием
 - **Категоризирует**: белые (CIDR/SNI для отключений мобильного) и чёрные (обычный VPN для YouTube/Discord/WhatsApp)
-- **Фоновый планировщик** — автоматическая проверка каждый час
+- **Фоновый планировщик** — автоматическая проверка каждые 6 часов (`VPN_CHECK_INTERVAL`)
 - **Ручная проверка** — вставь любую vless/vmess/ss/trojan ссылку и проверь
 
 ---
@@ -88,14 +88,15 @@ vpn-monitor/
 | Метод | Путь | Описание |
 |-------|------|----------|
 | `GET` | `/api/status` | Статус системы: is_checking, last_update, check_progress |
-| `GET` | `/api/summary` | Сводка по всем источникам: alive/dead/unsupported/avg_latency |
-| `GET` | `/api/results` | Все результаты проверки (все источники) |
+| `GET` | `/api/summary` | Сводка по всем источникам: alive/dead/unsupported/shutdown_ready/avg_latency |
 | `GET` | `/api/results/{source_id}` | Результаты одного источника |
 | `GET` | `/api/sources` | Список всех подписок |
-| `POST` | `/api/start_check` | Запустить полную проверку (rate limit: 2/мин) |
-| `POST` | `/api/stop_check` | Остановить текущую проверку |
-| `POST` | `/api/test_link` | Проверить одну ссылку (body: `{"link": "vless://..."}`, rate limit: 5/мин) |
+| `POST` | `/api/test_link` | Проверить одну ссылку (body: `{"link": "vless://..."}`, rate limit: `VPN_RATE_LIMIT_TEST`/мин) |
 | `GET` | `/health` | Health check (вне basePath) |
+
+> Проверка запускается только фоновым планировщиком (каждые `VPN_CHECK_INTERVAL`
+> сек). Ручных эндпоинтов запуска/остановки нет — перепроверка отдельных
+> профилей идёт через `POST /api/test_link`.
 
 ---
 
@@ -120,22 +121,22 @@ vpn-monitor/
 
 | Переменная | По умолчанию | Описание |
 |------------|-------------|----------|
-| `VPN_HOST` | `0.0.0.0` | Хост сервера |
+| `VPN_HOST` | `127.0.0.1` | Хост сервера |
 | `VPN_PORT` | `8052` | Порт backend |
 | `VPN_DEBUG` | `false` | Debug-логирование |
 | `VPN_BASE_PATH` | `/vpn-monitor` | Базовый путь API |
 | `VPN_XRAY_PATH` | `/app/xray/xray` | Путь к бинарнику Xray |
 | `VPN_DATA_DIR` | `/app/data` | Директория данных |
-| `VPN_CHECK_INTERVAL` | `3600` | Интервал автопроверки (сек) |
+| `VPN_CHECK_INTERVAL` | `21600` | Интервал автопроверки (сек, 6 ч) |
 | `VPN_MAX_CONFIGS_PER_SOURCE` | `150` | Макс. конфигов на источник |
 | `VPN_PARALLEL_SOURCES` | `3` | Параллельных источников |
+| `VPN_INTER_TEST_DELAY` | `0.3` | Пауза между тестами (сек) |
 | `VPN_XRAY_STARTUP_TIMEOUT` | `5.0` | Таймаут запуска Xray (сек) |
 | `VPN_XRAY_TEST_TIMEOUT` | `8.0` | Таймаут теста connectivity (сек) |
 | `VPN_PORT_BASE` | `10808` | Начальный порт SOCKS-прокси |
 | `VPN_PORT_RANGE` | `200` | Диапазон портов |
 | `VPN_GEO_CACHE_TTL` | `3600` | TTL geo-кэша (сек) |
-| `VPN_RATE_LIMIT_CHECK` | `2` | Rate limit: start_check (запросов/мин) |
-| `VPN_RATE_LIMIT_TEST` | `5` | Rate limit: test_link (запросов/мин) |
+| `VPN_RATE_LIMIT_TEST` | `20` | Rate limit: test_link (запросов/мин) |
 | `VPN_CORS_ORIGINS` | `["http://localhost:3052","https://lmtools.ru"]` | CORS origins |
 
 ---
