@@ -2,7 +2,6 @@
 
 > **Прод:** https://lmtools.ru/vpn-monitor
 > **Репо:** github.com/axor91/vpn-monitor
-> **Инфраструктура:** см. [INFRASTRUCTURE.md](INFRASTRUCTURE.md)
 
 Система мониторинга VPN-профилей для России. Автоматически проверяет доступность VPN-конфигураций из публичных подписок, измеряет латентность, определяет геолокацию и категоризирует профили по типу обхода блокировок.
 
@@ -68,7 +67,6 @@ vpn-monitor/
 │   ├── tailwind.config.ts
 │   └── package.json
 ├── docker-compose.yml          # 2 сервиса, host network, healthcheck
-└── INFRASTRUCTURE.md           # Инфраструктура и деплой
 ```
 
 ---
