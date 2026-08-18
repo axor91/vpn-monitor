@@ -192,8 +192,8 @@ npm run dev
 
 ## Автор
 
-Артур Абдурахманов — [github.com/axor91](https://github.com/axor91) ·
-Telegram [@ar4u91](https://t.me/ar4u91). Проект спроектирован, написан и
-эксплуатируется в одиночку (backend Python async + два VPN-движка, frontend
-Next.js, Docker, прод за nginx); разработка AI-assisted (Claude Code + Codex)
-под собственными гейтами качества.
+Артур Абдурахманов · [github.com/axor91](https://github.com/axor91) ·
+Telegram [@ar4u91](https://t.me/ar4u91)
+
+Разработка AI-assisted (Claude Code + Codex); качество держат тесты и
+релизные гейты, а не доверие к генерации.
